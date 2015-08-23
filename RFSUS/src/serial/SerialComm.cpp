@@ -1,10 +1,14 @@
-#include "../../include/serial/SerialComm.h"
-#include <iostream>
+#include <serial/SerialComm.h>
 #include <stdlib.h>
+#include <iostream>
+
 #ifdef __linux__
 #include <stdio.h>
+//#include <sys/types.h>
+//#include <sys/stat.h>
+//#include <sys/select.h>
 #include <fcntl.h>
-#include <unistd.h>
+#include <termios.h>
 #endif
 
 using namespace std;
@@ -22,17 +26,17 @@ int SerialComm::iniciar() {
 #ifndef SEM_ARDUINO
 #if _WIN32 || _WIN64
 	hPorta = CreateFile(porta.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL,
-	OPEN_EXISTING, 0, NULL);
+			OPEN_EXISTING, 0, NULL);
 
 	if (hPorta == INVALID_HANDLE_VALUE) {
 		result = GetLastError();
 		cerr << "Erro abrindo a porta de comunicacao!" << endl;
 	} else {
 		// configura timeouts
-		COMMTIMEOUTS cto = { 1, 100, 1000, 0, 0 };
+		COMMTIMEOUTS cto = {1, 100, 1000, 0, 0};
 		if (!SetCommTimeouts(hPorta, &cto)) {
 			cout << "Nao foi possivel configurar timeouts de comunicacao!"
-					<< endl;
+			<< endl;
 		}
 
 		// configura acesso aa porta
@@ -54,23 +58,35 @@ int SerialComm::iniciar() {
 #endif
 #ifdef __linux__
 	hPorta = open(porta.c_str(),
-			O_RDWR | O_NOCTTY |
-			O_NDELAY);
-	if (hPorta == -1)
-	{
+	O_RDWR | O_NOCTTY);
+	if (hPorta < 0) {
 		cerr << "Erro abrindo a porta de comunicacao!" << endl;
-	}
-	else
-	{
-		fcntl(hPorta, F_SETFL, 0);
+	} else {
+		fcntl(hPorta, F_SETFL, O_NONBLOCK);
 
-		result = EXIT_SUCCESS; // sem erros
+		speed_t baud = B9600;
+
+		struct termios settings;
+		tcgetattr(hPorta, &settings);
+
+		cfsetospeed(&settings, baud);
+		settings.c_cflag &= ~PARENB;
+		settings.c_cflag &= ~CSTOPB;
+		settings.c_cflag &= ~CSIZE;
+		settings.c_cflag |= CS8 | CLOCAL;
+		settings.c_lflag = ~ICANON;
+		settings.c_cc[VTIME] = 10;
+		settings.c_oflag &= ~OPOST;
+
+		tcsetattr(hPorta, TCSANOW, &settings);
+		tcflush(hPorta, TCOFLUSH);
+
+		result = EXIT_SUCCESS;
 	}
 #endif
 #endif
 	// espera ateh que porta serial esteja pronta para receber comandos
-	if (result == EXIT_SUCCESS)
-	{
+	if (result == EXIT_SUCCESS) {
 		Sleep(2000);
 	}
 
@@ -111,10 +127,9 @@ string SerialComm::ler(long unsigned int bytesLer,
 	return id;
 }
 
-void SerialComm::escrever(int comando,
-		long unsigned int &bytesEscritos) {
+void SerialComm::escrever(int comando, long unsigned int &bytesEscritos) {
 	bytesEscritos = 0;
-	char bcomando = (char)comando;
+	char bcomando = (char) comando;
 #ifdef SEM_ARDUINO
 	bytesEscritos = sizeof(bcomando);
 #else
@@ -126,13 +141,12 @@ void SerialComm::escrever(int comando,
 #endif
 }
 
-void SerialComm::escrever(int comando,
-		int parametro,
+void SerialComm::escrever(int comando, int parametro,
 		long unsigned int &bytesEscritos) {
 	bytesEscritos = 0;
 	char comandoPar[2];
-	comandoPar[0] = (char)comando;
-	comandoPar[1] = (char)parametro;
+	comandoPar[0] = (char) comando;
+	comandoPar[1] = (char) parametro;
 #ifdef SEM_ARDUINO
 	bytesEscritos = sizeof(comandoPar);
 #else
@@ -144,15 +158,13 @@ void SerialComm::escrever(int comando,
 #endif
 }
 
-void SerialComm::escrever(int comando,
-		int parametro1,
-		int parametro2,
+void SerialComm::escrever(int comando, int parametro1, int parametro2,
 		long unsigned int &bytesEscritos) {
 	bytesEscritos = 0;
 	char comandoPars[3];
-	comandoPars[0] = (char)comando;
-	comandoPars[1] = (char)parametro1;
-	comandoPars[2] = (char)parametro2;
+	comandoPars[0] = (char) comando;
+	comandoPars[1] = (char) parametro1;
+	comandoPars[2] = (char) parametro2;
 #ifdef SEM_ARDUINO
 	bytesEscritos = sizeof(comandoPars);
 #else

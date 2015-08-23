@@ -35,6 +35,7 @@ void lerRFID()
 void enviarRFID() 
 {
   lerRFID();
+  
 }
 
 // inicializa os recursos necessarios da solucao
